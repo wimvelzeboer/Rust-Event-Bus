@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
 use super::Event;
 use super::Subscriber;
 
@@ -11,9 +12,9 @@ use super::Subscriber;
 ///
 /// ## Fields
 ///
-/// * `events` - A vec of events that have been published to the event bus.
+/// * `events` - A vec of events grouped by their name that have been published to the event bus.
 ///
-/// * `subscribers` - A vec of all subscribers to the event bus.
+/// * `subscribers` - A vec of subscribers grouped by an event name.
 ///
 /// ## Methods
 ///
@@ -24,47 +25,95 @@ use super::Subscriber;
 /// * `run` - Runs through each event, and calls each listener's on_event method.
 ///
 /// * `clear` - Clears all events from the event bus.
-pub struct EventBus<T> {
-    /// A vec of events that have been published to the event bus.
-    events: Vec<Event<T>>,
+
+pub struct EventBus {
+    /// A vec of events grouped by an event name that have been published to the event bus.
+    events: HashMap<String, Vec<Box<Event>>>,
     /// A vec of all subscribers that are linked to the event bus.
-    subscribers: Vec<Box<dyn Subscriber<Input = T>>>,
+    subscribers: HashMap<String, Vec<Box<dyn Subscriber>>>,
 }
 
-impl<T> EventBus<T> {
+impl EventBus {
     /// # New
     ///
     /// Creates a new event bus.
-    pub fn new() -> EventBus<T> {
+    pub fn new() -> EventBus {
         EventBus {
-            events: Vec::new(),
-            subscribers: Vec::new(),
+            events: HashMap::new(),
+            subscribers: HashMap::new(),
         }
     }
 
     /// # Publish
     ///
     /// Publishes an event to the event bus.
-    pub fn publish(&mut self, message: Event<T>) {
-        self.events.push(message);
+    pub fn publish(&mut self, event_name: String, message: Event) {
+        if self.events.contains_key(&event_name) {
+            self.events.get_mut(&event_name).unwrap()
+                .push(Box::new(message));
+        } else {
+            self.events.insert(event_name, vec![Box::new(message)]);
+        }
     }
 
     /// # Subscribe Listener
     ///
     /// Subscribes a listener to the event bus.
-    pub fn subscribe_listener<R: Subscriber<Input = T> + 'static>(&mut self, listener: R) {
-        self.subscribers.push(Box::new(listener));
+    pub fn subscribe_listener<R: Subscriber + 'static>(&mut self, event_name:String, listener: R) {
+        if self.subscribers.contains_key(&event_name) {
+            self.subscribers.get_mut(&event_name).unwrap()
+                .push(Box::new(listener));
+        } else {
+            self.subscribers.insert(event_name, vec![Box::new(listener)]);
+        }
     }
 
     /* Upon run, messages will be cleared! */
 
     /// # Run
     ///
-    /// Runs through each event, and calls each listener's on_event method.
+    /// Runs through each event, and calls each listener's methods.
+    /// The on_before of all listeners is called first, then the on_event and finally the on_after
     pub fn run(&mut self) {
-        for event in self.events.drain(..) {
-            for listener in self.subscribers.iter_mut() {
-                listener.on_event(&event);
+        for (event, mut messages) in self.events.drain() {
+            if self.subscribers.contains_key(&event) {
+               'message_loop: for message in &mut messages {
+
+                    // on before
+                    for listener in self.subscribers.get_mut(&event).unwrap().iter_mut() {
+                        match listener.on_before(message) {
+                            Err(message) => {
+                                println!("Subscriber error: {}", message);
+                                break 'message_loop;
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    // on event
+                    for listener in self.subscribers.get_mut(&event).unwrap().iter_mut() {
+                        match listener.on_event(message) {
+                            Err(message) => {
+                                println!("Subscriber error: {}", message);
+                                break 'message_loop;
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    // on after
+                    for listener in self.subscribers.get_mut(&event).unwrap().iter_mut() {
+                        match listener.on_after(message) {
+                            Err(message) => {
+                                println!("Subscriber error: {}", message);
+                                break 'message_loop;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            } else {
+                println!("No event subscribers for '{}'", event);
             }
         }
     }
@@ -74,12 +123,5 @@ impl<T> EventBus<T> {
     /// Clears all events from the event bus.
     pub fn clear(&mut self) {
         self.events.clear();
-    }
-}
-
-// Default
-impl<T> Default for EventBus<T> {
-    fn default() -> Self {
-        Self::new()
     }
 }

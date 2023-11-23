@@ -1,3 +1,4 @@
+#![allow(unused_variables)]
 use super::Event;
 
 /// # Subscriber
@@ -18,9 +19,19 @@ use super::Event;
 ///
 /// * `on_event` - Called when the event bus is run.
 pub trait Subscriber {
-    /// The type of data that is held by the event.
-    type Input;
+
+    /// Called before the on_event is run by the event bus
+    fn on_before(&mut self, event: &mut Event) -> Result<(), String> {
+        Ok(())
+    }
 
     /// Called when the event bus is run.
-    fn on_event(&mut self, event: &Event<Self::Input>);
+    fn on_event(&mut self, event: &mut Event) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Called after the on_event is run by the event bus
+    fn on_after(&self, event: &Event) -> Result<(), String> {
+        Ok(())
+    }
 }
