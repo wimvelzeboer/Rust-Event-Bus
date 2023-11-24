@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use super::Event;
 use super::Subscriber;
+use log::{info, error, warn};
 
 /// # Event Bus
 ///
@@ -44,10 +45,12 @@ impl EventBus {
         }
     }
 
-    /// # Publish
+    /// # Register
     ///
-    /// Publishes an event to the event bus.
-    pub fn publish(&mut self, event_name: String, message: Event) {
+    /// Registers an event with the event bus.
+    pub fn register(&mut self, event_name: String, message: Event) {
+        info!("EVENT: Register '{}' event with message: {:?}", event_name, &message);
+
         if self.events.contains_key(&event_name) {
             self.events.get_mut(&event_name).unwrap()
                 .push(Box::new(message));
@@ -70,11 +73,11 @@ impl EventBus {
 
     /* Upon run, messages will be cleared! */
 
-    /// # Run
+    /// # Publish
     ///
-    /// Runs through each event, and calls each listener's methods.
+    /// Publishes each event, and calls each listener's methods.
     /// The on_before of all listeners is called first, then the on_event and finally the on_after
-    pub fn run(&mut self) {
+    pub fn publish(&mut self) {
         for (event, mut messages) in self.events.drain() {
             if self.subscribers.contains_key(&event) {
                'message_loop: for message in &mut messages {
@@ -83,7 +86,7 @@ impl EventBus {
                     for listener in self.subscribers.get_mut(&event).unwrap().iter_mut() {
                         match listener.on_before(message) {
                             Err(message) => {
-                                println!("Subscriber error: {}", message);
+                                error!("Subscriber error: {}", message);
                                 break 'message_loop;
                             }
                             _ => {}
@@ -94,7 +97,7 @@ impl EventBus {
                     for listener in self.subscribers.get_mut(&event).unwrap().iter_mut() {
                         match listener.on_event(message) {
                             Err(message) => {
-                                println!("Subscriber error: {}", message);
+                                error!("Subscriber error: {}", message);
                                 break 'message_loop;
                             }
                             _ => {}
@@ -105,7 +108,7 @@ impl EventBus {
                     for listener in self.subscribers.get_mut(&event).unwrap().iter_mut() {
                         match listener.on_after(message) {
                             Err(message) => {
-                                println!("Subscriber error: {}", message);
+                                error!("Subscriber error: {}", message);
                                 break 'message_loop;
                             }
                             _ => {}
@@ -113,7 +116,7 @@ impl EventBus {
                     }
                 }
             } else {
-                println!("No event subscribers for '{}'", event);
+                warn!("No event subscribers for '{}'", event);
             }
         }
     }

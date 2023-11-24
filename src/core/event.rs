@@ -19,6 +19,7 @@ use std::any::Any;
 /// * `get_data` - Returns the data held by the event.
 
 
+#[derive(Debug)]
 pub struct Event {
     /// The data that is held by the event.
     pub data: Box<dyn Any>,
