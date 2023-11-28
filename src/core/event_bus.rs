@@ -35,6 +35,8 @@ pub struct EventBus {
     subscribers: HashMap<String, Vec<Box<dyn Subscriber>>>,
 
     suppress_subscribers: Option<Vec<TypeId>>,
+
+    fail_on_error: bool
 }
 
 impl EventBus {
@@ -45,7 +47,8 @@ impl EventBus {
         EventBus {
             events: HashMap::new(),
             subscribers: HashMap::new(),
-            suppress_subscribers: None
+            suppress_subscribers: None,
+            fail_on_error: true,
         }
     }
 
@@ -83,7 +86,7 @@ impl EventBus {
     ///
     /// Publishes each event, and calls each listener's methods.
     /// The on_before of all listeners is called first, then the on_event and finally the on_after
-    pub fn publish(&mut self) {
+    pub fn publish(&mut self) -> Result<(), String> {
         for (event, mut messages) in self.events.drain() {
             if self.subscribers.contains_key(&event) {
                'message_loop: for message in &mut messages {
@@ -93,6 +96,7 @@ impl EventBus {
                         match listener.on_before(message) {
                             Err(message) => {
                                 error!("Subscriber error: {}", message);
+                                if self.fail_on_error { return Err(message)}
                                 break 'message_loop;
                             }
                             _ => {}
@@ -104,6 +108,7 @@ impl EventBus {
                         match listener.on_event(message) {
                             Err(message) => {
                                 error!("Subscriber error: {}", message);
+                                if self.fail_on_error { return Err(message)}
                                 break 'message_loop;
                             }
                             _ => {}
@@ -115,6 +120,7 @@ impl EventBus {
                         match listener.on_after(message) {
                             Err(message) => {
                                 error!("Subscriber error: {}", message);
+                                if self.fail_on_error { return Err(message)}
                                 break 'message_loop;
                             }
                             _ => {}
@@ -125,6 +131,7 @@ impl EventBus {
                 warn!("No event subscribers for '{}'", event);
             }
         }
+        Ok(())
     }
 
     pub fn suppress_subscriber<R: Subscriber + 'static>(&mut self, listener: R ) {
@@ -149,5 +156,62 @@ impl EventBus {
     /// Clears all events from the event bus.
     pub fn clear(&mut self) {
         self.events.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use log::{debug};
+    use crate::{Event, EventBus, Subscriber};
+
+    struct ExampleSubscriber {
+    }
+
+    impl ExampleSubscriber {
+        const NAME: &'static str = "ExampleSubscriber";
+
+        pub fn new() -> ExampleSubscriber {
+            ExampleSubscriber { }
+        }
+    }
+
+    impl Subscriber for ExampleSubscriber {
+
+        fn on_event(&mut self, event: &mut Event) -> Result<(), String>{
+            match event.get_data::<String>() {
+                Some(value) => {
+                    debug!("{} received STRING message: {}", ExampleSubscriber::NAME, value);
+                    Ok(())
+                }
+                None => {
+                    let message = format!("{} received UNKNOWN message", ExampleSubscriber::NAME);
+                    Err(message)
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_publisher() {
+        let mut event_bus = EventBus::new();
+        event_bus.subscribe_listener("bar", ExampleSubscriber::new());
+        let result =
+            event_bus
+                .register("bar", Event::new("hello".to_string()))
+                .publish();
+        assert_eq!(Ok(()), result);
+    }
+
+    #[test]
+    fn test_publisher_with_invalid_payload() {
+        let mut event_bus = EventBus::new();
+        event_bus.subscribe_listener("bar", ExampleSubscriber::new());
+        let result =
+            event_bus
+                .register("bar", Event::new(32u32))
+                .publish();
+        let message = "ExampleSubscriber received UNKNOWN message".to_string();
+        let expected = Err(message.clone());
+        assert_eq!(expected, result, "Expected error message: '{}'", message);
     }
 }
