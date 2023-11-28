@@ -77,15 +77,15 @@ fn main() {
     let mut event_bus = EventBus::new();
 
     // We have to manually create and add each subscriber to the event bus.
-    event_bus.subscribe_listener("bar", ExampleSubscriber::new());
-    event_bus.subscribe_listener("foo", NumberSubscriber::new());
+    event_bus
+        .subscribe_listener("bar", ExampleSubscriber::new())
+        .subscribe_listener("foo", NumberSubscriber::new());
 
     // We can manually register an event to the event bus.
-    event_bus.register("foo", Event::new(42u32));
-    event_bus.register("bar", Event::new("hello".to_string()));
-    event_bus.register("foo", Event::new("hello".to_string()));
-    event_bus.register("hello", Event::new("hello".to_string()));
-
-    // Publishes each event, and calls each listener's on_* methods.
-    event_bus.publish();
+    event_bus
+        .register("foo", Event::new(42u32))
+        .register("bar", Event::new("hello".to_string()))
+        .register("foo", Event::new("hello".to_string()))
+        .register("hello", Event::new("hello".to_string()))
+        .publish();  // Publishes each event, and calls each listener's on_* methods.
 }
