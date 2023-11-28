@@ -1,7 +1,7 @@
 use std::string::ToString;
 use simple_event_bus::{Event, EventBus, Subscriber};
 use env_logger::Env;
-use log::debug;
+use log::{debug, error};
 
 struct ExampleSubscriber {
 }
@@ -82,10 +82,14 @@ fn main() {
         .subscribe_listener("foo", NumberSubscriber::new());
 
     // We can manually register an event to the event bus.
-    event_bus
+    match event_bus
         .register("foo", Event::new(42u32))
         .register("bar", Event::new("hello".to_string()))
         .register("foo", Event::new("hello".to_string()))
         .register("hello", Event::new("hello".to_string()))
-        .publish();  // Publishes each event, and calls each listener's on_* methods.
+        .publish() // Publishes each event, and calls each listener's on_* methods.
+    {
+        Ok(_) => println!("All events published successfully"),
+        Err(e) => error!("Some error occurred: {}", e),
+    }
 }
