@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use super::Event;
 use super::Subscriber;
@@ -32,6 +33,8 @@ pub struct EventBus {
     events: HashMap<String, Vec<Box<Event>>>,
     /// A vec of all subscribers that are linked to the event bus.
     subscribers: HashMap<String, Vec<Box<dyn Subscriber>>>,
+
+    suppress_subscribers: Option<Vec<TypeId>>,
 }
 
 impl EventBus {
@@ -42,32 +45,33 @@ impl EventBus {
         EventBus {
             events: HashMap::new(),
             subscribers: HashMap::new(),
+            suppress_subscribers: None
         }
     }
 
     /// # Register
     ///
     /// Registers an event with the event bus.
-    pub fn register(&mut self, event_name: String, message: Event) {
+    pub fn register(&mut self, event_name: &str, message: Event) {
         info!("EVENT: Register '{}' event with message: {:?}", event_name, &message);
 
-        if self.events.contains_key(&event_name) {
-            self.events.get_mut(&event_name).unwrap()
+        if self.events.contains_key(event_name) {
+            self.events.get_mut(event_name).unwrap()
                 .push(Box::new(message));
         } else {
-            self.events.insert(event_name, vec![Box::new(message)]);
+            self.events.insert(event_name.to_string(), vec![Box::new(message)]);
         }
     }
 
     /// # Subscribe Listener
     ///
     /// Subscribes a listener to the event bus.
-    pub fn subscribe_listener<R: Subscriber + 'static>(&mut self, event_name:String, listener: R) {
-        if self.subscribers.contains_key(&event_name) {
-            self.subscribers.get_mut(&event_name).unwrap()
+    pub fn subscribe_listener<R: Subscriber + 'static>(&mut self, event_name:&str, listener: R) {
+        if self.subscribers.contains_key(event_name) {
+            self.subscribers.get_mut(event_name).unwrap()
                 .push(Box::new(listener));
         } else {
-            self.subscribers.insert(event_name, vec![Box::new(listener)]);
+            self.subscribers.insert(event_name.to_string(), vec![Box::new(listener)]);
         }
     }
 
@@ -120,6 +124,23 @@ impl EventBus {
             }
         }
     }
+
+    pub fn suppress_subscriber<R: Subscriber + 'static>(&mut self, listener: R ) {
+        let type_id = listener.type_id();
+        match &mut self.suppress_subscribers {
+            Some(subscribers) => {
+                if subscribers.contains(&type_id) == false {
+                    subscribers.push(type_id);
+                }
+            }
+            None => {
+                self.suppress_subscribers = Some(
+                    vec![type_id]
+                )
+            }
+        }
+    }
+
 
     /// # Clear
     ///
