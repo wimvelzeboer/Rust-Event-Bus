@@ -52,7 +52,7 @@ impl EventBus {
     /// # Register
     ///
     /// Registers an event with the event bus.
-    pub fn register(&mut self, event_name: &str, message: Event) {
+    pub fn register(&mut self, event_name: &str, message: Event) -> &mut Self {
         info!("EVENT: Register '{}' event with message: {:?}", event_name, &message);
 
         if self.events.contains_key(event_name) {
@@ -61,18 +61,20 @@ impl EventBus {
         } else {
             self.events.insert(event_name.to_string(), vec![Box::new(message)]);
         }
+        self
     }
 
     /// # Subscribe Listener
     ///
     /// Subscribes a listener to the event bus.
-    pub fn subscribe_listener<R: Subscriber + 'static>(&mut self, event_name:&str, listener: R) {
+    pub fn subscribe_listener<R: Subscriber + 'static>(&mut self, event_name:&str, listener: R) -> &mut Self {
         if self.subscribers.contains_key(event_name) {
             self.subscribers.get_mut(event_name).unwrap()
                 .push(Box::new(listener));
         } else {
             self.subscribers.insert(event_name.to_string(), vec![Box::new(listener)]);
         }
+        self
     }
 
     /* Upon run, messages will be cleared! */
